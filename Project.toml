@@ -1,0 +1,15 @@
+name = "test_Tandem_jll"
+uuid = "a950525f-1d4f-4c79-bc6c-f2efdfe2e139"
+version = "0.1.0"
+authors = ["Boris Kaus <kaus@uni-mainz.de>"]
+
+[deps]
+MPICH_jll = "7cb0a576-ebde-5e09-9194-50597f1243b4"
+MPIPreferences = "3da0fdf6-3ccc-4f1b-acd9-58baa6c99267"
+MicrosoftMPI_jll = "9237b28f-5490-5468-be7b-bb81f5f5e6cf"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+MicrosoftMPI_jll = "10.1.2"
+julia = "1.12"

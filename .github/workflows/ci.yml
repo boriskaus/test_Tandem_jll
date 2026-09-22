@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches:
+      - main
+    tags: '*'
+  workflow_dispatch:
+
+jobs:
+  run_tests:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # One native runner per tarball we ship.  Julia floor is 1.12 because
+        # PETSc_jll 3.25.4 needs the SuiteSparse that ships with Julia 1.12.
+        include:
+          - { version: '1.12', os: ubuntu-latest,  arch: x64 }
+          - { version: '1',    os: ubuntu-latest,  arch: x64 }
+          - { version: '1.12', os: windows-latest, arch: x64 }
+          - { version: '1',    os: windows-latest, arch: x64 }
+          - { version: '1',    os: macos-15-intel, arch: x64 }      # native x86_64-apple-darwin
+          - { version: '1',    os: macos-14,       arch: aarch64 }  # native aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      - run: julia -e 'using InteractiveUtils; versioninfo(verbose=true)'
+      - uses: actions/cache@v4
+        env:
+          cache-name: cache-artifacts
+        with:
+          path: ~/.julia/artifacts
+          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-${{ env.cache-name }}-
+            ${{ runner.os }}-test-
+            ${{ runner.os }}-
+      - uses: julia-actions/julia-buildpkg@latest
+      - uses: julia-actions/julia-runtest@latest
