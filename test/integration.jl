@@ -133,6 +133,51 @@ for d in ("2D", "3D"), f in readdir(joinpath(testdir, "scripts", d); join = true
     write(f, txt)
 end
 
+# test_regression_static.py compares point_data by array position. DG output stores one
+# value per element-local node (many duplicate coordinates), and the element order follows
+# the ParMETIS partition, which is platform-dependent -- so the test can only pass on the
+# platform its reference .vtu was generated on. Rewrite the comparison to key on
+# (cell centroid, point), as tandem's own conftest.py helpers do for the other tests.
+# Same reference data, same tolerance, just order-independent. Proposed upstream.
+let f = joinpath(testdir, "test_regression_static.py")
+    txt = read(f, String)
+    old = "    assert_allclose(out_data, ref_data, atol=tolerances[\"static\"])"
+    new = join([
+        "    import numpy as np",
+        "",
+        "    def _cell_point_map(mesh, name):",
+        "        pts, vals = mesh.points, np.ravel(mesh.point_data[name])",
+        "        table = {}",
+        "        for blk in mesh.cells:",
+        "            for ids in blk.data:",
+        "                centroid = tuple(np.round(pts[ids].mean(axis=0), 10))",
+        "                table[centroid] = {tuple(np.round(pts[i], 10)): vals[i] for i in ids}",
+        "        return table",
+        "",
+        "    out_map, ref_map = _cell_point_map(out, field), _cell_point_map(ref, field)",
+        "    assert set(out_map) == set(ref_map), (",
+        "        f\"cell centroids differ: {len(out_map)} in output, {len(ref_map)} in reference\"",
+        "    )",
+        "    expected = sum(len(v) for v in ref_map.values())",
+        "    diffs = [",
+        "        abs(v - ref_map[c][p])",
+        "        for c, cell_pts in out_map.items()",
+        "        for p, v in cell_pts.items()",
+        "        if p in ref_map[c]",
+        "    ]",
+        "    assert len(diffs) == expected, f\"matched {len(diffs)} of {expected} (cell, point) pairs\"",
+        "    assert max(diffs) <= tolerances[\"static\"], (",
+        "        f\"max |{field} diff| = {max(diffs):.6g} > {tolerances['static']}\"",
+        "    )",
+    ], "\n")
+    if occursin(old, txt)
+        write(f, replace(txt, old => new))
+        @info "rewrote test_regression_static.py to match on (cell centroid, point)"
+    else
+        @warn "test_regression_static.py comparison not found; left as upstream has it"
+    end
+end
+
 # --- environment for the child processes ------------------------------------
 
 libdirs = unique(vcat(Tandem_jll.LIBPATH_list..., gmsh_libs,
