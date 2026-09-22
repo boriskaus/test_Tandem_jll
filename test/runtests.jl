@@ -1,3 +1,17 @@
+# Tests for Tandem_jll, the Yggdrasil build of tandem:
+#   https://github.com/TEAR-ERC/tandem/   (BSD-3-Clause, (c) 2020 LMU Munchen)
+#
+# tandem is developed by Carsten Uphoff, Dave May, Alice-Agnes Gabriel, Jeena Yun,
+# Thomas Ulrich, Nico Schliwa and Casper Pranger (TEAR-ERC). If you use it, please cite
+#   Uphoff, May & Gabriel (2023), "A discontinuous Galerkin method for sequences of
+#   earthquakes and aseismic slip on multiple faults using unstructured curvilinear
+#   grids", Geophysical Journal International 233(1), 586-626.
+#   https://doi.org/10.1093/gji/ggac467
+#
+# This repository is not affiliated with the tandem developers; it only packages and
+# tests their code. Note this is a smoke/consistency suite, not tandem's own test
+# suite: https://github.com/TEAR-ERC/tandem/blob/main/test/README.md
+
 using Test, Pkg
 using CompilerSupportLibraries_jll, OpenBLAS32_jll
 
