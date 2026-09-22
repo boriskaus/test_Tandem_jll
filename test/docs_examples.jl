@@ -22,14 +22,17 @@
 #     equivalent.
 
 using Test, Pkg
-using OpenBLAS32_jll
 
+# Resolve into a throwaway environment: Tandem_jll is not registered, so adding it to
+# this repo's Project.toml would leave it unresolvable for everyone else.
+Pkg.activate(mktempdir(); io = devnull)
+Pkg.add("OpenBLAS32_jll"; io = devnull)
 if !isempty(get(ENV, "TANDEM_JLL_LOCAL_PATH", ""))
-    Pkg.develop(path = expanduser(ENV["TANDEM_JLL_LOCAL_PATH"]))
+    Pkg.develop(path = expanduser(ENV["TANDEM_JLL_LOCAL_PATH"]); io = devnull)
 else
-    Pkg.add(url = "https://github.com/boriskaus/Tandem_jll.jl")
+    Pkg.add(url = "https://github.com/boriskaus/Tandem_jll.jl", io = devnull)
 end
-using Tandem_jll
+using Tandem_jll, OpenBLAS32_jll
 
 const TANDEM_COMMIT = "b75f66692d299673bf85632ed71e2a7da71ff2e0"
 const pathsep = Sys.iswindows() ? ';' : ':'

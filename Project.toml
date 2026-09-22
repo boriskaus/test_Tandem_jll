@@ -10,10 +10,8 @@ MPIPreferences = "3da0fdf6-3ccc-4f1b-acd9-58baa6c99267"
 MicrosoftMPI_jll = "9237b28f-5490-5468-be7b-bb81f5f5e6cf"
 OpenBLAS32_jll = "656ef2d0-ae68-5445-9ca0-591084a874a2"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-Tandem_jll = "992e12d1-d328-585c-a8a3-e9ddf32e7ce7"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 MicrosoftMPI_jll = "10.1.2"
-Tandem_jll = "1.2.0"
 julia = "1.12"

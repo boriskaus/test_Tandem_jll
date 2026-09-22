@@ -12,14 +12,17 @@
 # Select the configuration with TANDEM_DIM and TANDEM_DEGREE (default 2 and 2).
 
 using Test, Pkg
-using OpenBLAS32_jll
 
+# Resolve into a throwaway environment: Tandem_jll is not registered, so adding it to
+# this repo's Project.toml would leave it unresolvable for everyone else.
+Pkg.activate(mktempdir(); io = devnull)
+Pkg.add("OpenBLAS32_jll"; io = devnull)
 if !isempty(get(ENV, "TANDEM_JLL_LOCAL_PATH", ""))
-    Pkg.develop(path = expanduser(ENV["TANDEM_JLL_LOCAL_PATH"]))
+    Pkg.develop(path = expanduser(ENV["TANDEM_JLL_LOCAL_PATH"]); io = devnull)
 else
-    Pkg.add(url = "https://github.com/boriskaus/Tandem_jll.jl")
+    Pkg.add(url = "https://github.com/boriskaus/Tandem_jll.jl", io = devnull)
 end
-using Tandem_jll
+using Tandem_jll, OpenBLAS32_jll
 
 # gmsh_jll cannot share an environment with Tandem_jll (gmsh pins HDF5_jll < 2 while
 # Tandem_jll needs 2.2.2), so resolve it in a project of its own and use its binary.
