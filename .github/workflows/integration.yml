@@ -64,7 +64,23 @@ jobs:
         env:
           TANDEM_DIM: ${{ matrix.dim }}
           TANDEM_DEGREE: ${{ matrix.deg }}
-        run: julia --project=. test/integration.jl
+          # Fixed location so the outputs can be collected as an artifact below.
+          TANDEM_INTEGRATION_WORKDIR: ${{ github.workspace }}/integration-work
+        run: |
+          mkdir -p "${{ github.workspace }}/integration-work"
+          julia --project=. test/integration.jl
+
+      - name: Collect outputs for inspection
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: outputs-${{ matrix.os }}-${{ matrix.dim }}d-p${{ matrix.deg }}
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            integration-work/tandem/test/temp_test_results/*.vtu
+            integration-work/tandem/test/temp_test_results/*.log
+            integration-work/tandem/test/test_data/reference_results/**/*.vtu
 
       - name: Documentation examples
         # Independent of dim/degree, so only run it once per OS.
