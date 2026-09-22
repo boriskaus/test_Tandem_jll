@@ -50,6 +50,17 @@ const ilp64_lib = Sys.iswindows() ?
     joinpath(Sys.BINDIR, "..", "lib", "julia", "libopenblas64_.$shlib_ext")
 const backing_libs = join((ilp64_lib, OpenBLAS32_jll.libopenblas_path), ";")
 
+# tandem prints "WARNING: Your stack size limit is quite small, increase it with
+# 'ulimit -Ss ...'". Its Eigen kernels really do overflow the default 8 MiB at
+# higher polynomial degrees, so honour that advice. macOS caps the hard limit at
+# ~64 MiB, hence the fallback.
+function raise_stack(argv::Vector{String})
+    Sys.iswindows() && return argv
+    return String["/bin/sh", "-c",
+                  "ulimit -s unlimited 2>/dev/null || ulimit -s 65520 2>/dev/null; exec \"\$@\"",
+                  "sh", argv...]
+end
+
 function with_env(cmd::Cmd; extra_libpath::Vector{String}=String[])
     key = Tandem_jll.JLLWrappers.LIBPATH_env
     # Prepend to whatever the command already carries rather than replacing it.
@@ -63,7 +74,7 @@ function with_env(cmd::Cmd; extra_libpath::Vector{String}=String[])
     libdirs = unique(vcat(CompilerSupportLibraries_jll.LIBPATH_list...,
                           Tandem_jll.LIBPATH_list..., extra_libpath,
                           String.(filter(!isempty, split(current, pathsep)))))
-    return addenv(cmd,
+    return addenv(Cmd(raise_stack(collect(String, cmd.exec))),
         "LBT_DEFAULT_LIBS" => backing_libs,
         key => join(libdirs, pathsep),
         "OMP_NUM_THREADS" => "1",
