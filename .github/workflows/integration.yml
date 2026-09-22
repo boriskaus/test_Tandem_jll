@@ -48,9 +48,10 @@ jobs:
           python-version: '3.11'
       - name: Install Python test dependencies
         shell: bash
-        # tandem's test/requirements.txt, minus gmsh: that comes from gmsh_jll so the
-        # binary and its shared libraries stay consistent across platforms.
-        run: python -m pip install --upgrade pip pytest numpy pandas meshio vtk matplotlib
+        # tandem's test/requirements.txt, minus gmsh (that comes from gmsh_jll so the
+        # binary and its libraries stay consistent across platforms) and plus h5py,
+        # which test_probe_writer_consistency.py imports but requirements.txt omits.
+        run: python -m pip install --upgrade pip pytest numpy pandas meshio vtk matplotlib h5py
       - uses: actions/cache@v4
         with:
           path: ~/.julia/artifacts

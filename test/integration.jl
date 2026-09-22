@@ -157,7 +157,18 @@ const child_env = Dict(
     gen = addenv(Cmd(`bash scripts/generate_test_outputs.sh
                       $exedir $(joinpath(testdir, "temp_test_results")) $DIM $DEG ON`;
                      dir = testdir), child_env)
-    @test success(pipeline(ignorestatus(gen); stdout = stdout, stderr = stderr))
+    ok = success(pipeline(ignorestatus(gen); stdout = stdout, stderr = stderr))
+    if !ok
+        # tandem's scripts redirect each run into temp_test_results/*.log; without this
+        # a crash in one of them shows only as "Abort trap" with no diagnostics.
+        tmpres = joinpath(testdir, "temp_test_results")
+        for f in (isdir(tmpres) ? sort(readdir(tmpres)) : String[])
+            endswith(f, ".log") || continue
+            @info "----- $f -----"
+            println(last(split(read(joinpath(tmpres, f), String), '\n'), 40) |> x -> join(x, "\n"))
+        end
+    end
+    @test ok
 
     # Mirrors the selection in tandem's test/CMakeLists.txt
     tests = ["test_parallel_consistency_static.py", "test_convergence_static.py"]
