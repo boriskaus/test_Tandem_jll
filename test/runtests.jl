@@ -1,4 +1,5 @@
-using Test, Pkg, Printf
+using Test, Pkg
+using CompilerSupportLibraries_jll, OpenBLAS32_jll
 
 # By default this tests the Tandem_jll deployed to GitHub (what CI does).  To test a
 # JLL built locally with BinaryBuilder (`julia build_tarballs.jl --deploy=local <triplet>`),
@@ -38,14 +39,33 @@ end
 @show mpiexec_cmd
 
 const pathsep = Sys.iswindows() ? ';' : ':'
+const shlib_ext = Sys.iswindows() ? "dll" : Sys.isapple() ? "dylib" : "so"
 
-mpirun(n::Int, cmd::Cmd) = addenv(
-    `$(mpiexec_cmd) -n $n $cmd`,
-    Tandem_jll.JLLWrappers.LIBPATH_env => join((Tandem_jll.LIBPATH[], MPI_LIBPATH[]), pathsep),
-    "OMP_NUM_THREADS" => "1",
-)
+# libblastrampoline has no backing library in a bare subprocess -- inside a Julia
+# process the stdlib OpenBLAS registers itself, but these executables are launched
+# directly, so unregistered ILP64 calls segfault. Point LBT at Julia's own ILP64
+# OpenBLAS and at OpenBLAS32_jll's LP64 one; LBT detects each one's word size.
+const ilp64_lib = Sys.iswindows() ?
+    joinpath(Sys.BINDIR, "libopenblas64_.dll") :
+    joinpath(Sys.BINDIR, "..", "lib", "julia", "libopenblas64_.$shlib_ext")
+const backing_libs = join((ilp64_lib, OpenBLAS32_jll.libopenblas_path), ";")
 
-serial(cmd::Cmd) = addenv(cmd, "OMP_NUM_THREADS" => "1")
+function with_env(cmd::Cmd; extra_libpath::Vector{String}=String[])
+    libdirs = unique(vcat(CompilerSupportLibraries_jll.LIBPATH_list...,
+                          Tandem_jll.LIBPATH_list..., extra_libpath))
+    return addenv(cmd,
+        "LBT_DEFAULT_LIBS" => backing_libs,
+        Tandem_jll.JLLWrappers.LIBPATH_env => join(libdirs, pathsep),
+        "OMP_NUM_THREADS" => "1",
+    )
+end
+
+# Interpolate cmd.exec, not cmd: Julia allows only the first interpolant to carry
+# its own environment, and the JLL wrappers set one on both.
+mpirun(n::Int, cmd::Cmd) =
+    with_env(`$(mpiexec_cmd) -n $n $(cmd.exec)`; extra_libpath=[MPI_LIBPATH[]])
+
+serial(cmd::Cmd) = with_env(cmd)
 
 const datadir = joinpath(@__DIR__, "data")
 
@@ -99,7 +119,7 @@ const static_exes = [
             err = l2_error(out)
             @test err !== nothing
             if err !== nothing
-                @info @sprintf("%s: L2 error = %.3e", nm, err)
+                @info "$nm: L2 error = $err"
                 push!(errs, err)
                 @test err < 1e-2
             end
@@ -123,7 +143,7 @@ const static_exes = [
             _, out_ser = run_capture(serial(`$(Tandem_jll.static_2d_p2()) manufactured.toml`))
             err_ser = l2_error(out_ser)
             if err_par !== nothing && err_ser !== nothing
-                @info @sprintf("serial %.6e vs 2 ranks %.6e", err_ser, err_par)
+                @info "serial $err_ser vs 2 ranks $err_par"
                 # Same discretisation, so the partitioning must not change the answer.
                 @test isapprox(err_par, err_ser; rtol=1e-6)
             end
@@ -140,7 +160,9 @@ const static_exes = [
             write(joinpath(tmp, "mms1.toml"), cfg)
             cp(joinpath(datadir, "mms1.lua"), joinpath(tmp, "mms1.lua"))
 
-            cmd = Cmd(serial(`$(Tandem_jll.tandem_2d_p2()) mms1.toml`); dir=tmp)
+            # Bound by step count, not simulated time: the adaptive QD integrator can
+            # take a very large number of steps to reach even a short final_time.
+            cmd = Cmd(serial(`$(Tandem_jll.tandem_2d_p2()) mms1.toml --petsc -ts_max_steps 20`); dir=tmp)
             out = IOBuffer()
             p = run(pipeline(ignorestatus(cmd); stdout=out, stderr=out); wait=false)
             wait(p)
