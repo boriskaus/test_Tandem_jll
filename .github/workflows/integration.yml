@@ -1,0 +1,72 @@
+name: Integration
+
+# Heavier than the smoke suite in ci.yml: this clones tandem and tandem_test_data,
+# installs a Python stack, generates reference outputs by running real simulations,
+# and then runs tandem's own pytest suite plus the documentation examples against
+# the JLL binaries. Run it on demand.
+on:
+  workflow_dispatch:
+    inputs:
+      dimensions:
+        description: 'DOMAIN_DIMENSION values to test (comma separated)'
+        default: '2'
+      degrees:
+        description: 'POLYNOMIAL_DEGREE values to test (comma separated)'
+        default: '2'
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      dims: ${{ steps.parse.outputs.dims }}
+      degs: ${{ steps.parse.outputs.degs }}
+    steps:
+      - id: parse
+        shell: bash
+        run: |
+          to_json() { printf '%s' "$1" | tr -d ' ' | awk -F, '{printf "["; for(i=1;i<=NF;i++){printf "%s%s", (i>1?",":""), $i}; printf "]"}'; }
+          echo "dims=$(to_json '${{ inputs.dimensions }}')" >> $GITHUB_OUTPUT
+          echo "degs=$(to_json '${{ inputs.degrees }}')" >> $GITHUB_OUTPUT
+
+  integration:
+    name: ${{ matrix.os }} - ${{ matrix.dim }}D p${{ matrix.deg }}
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+        dim: ${{ fromJson(needs.setup.outputs.dims) }}
+        deg: ${{ fromJson(needs.setup.outputs.degs) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python test dependencies
+        shell: bash
+        # tandem's test/requirements.txt, minus gmsh: that comes from gmsh_jll so the
+        # binary and its shared libraries stay consistent across platforms.
+        run: python -m pip install --upgrade pip pytest numpy pandas meshio vtk matplotlib
+      - uses: actions/cache@v4
+        with:
+          path: ~/.julia/artifacts
+          key: ${{ runner.os }}-integration-${{ hashFiles('**/Project.toml') }}
+          restore-keys: ${{ runner.os }}-integration-
+      - uses: julia-actions/julia-buildpkg@latest
+
+      - name: tandem's own pytest suite
+        shell: bash
+        env:
+          TANDEM_DIM: ${{ matrix.dim }}
+          TANDEM_DEGREE: ${{ matrix.deg }}
+        run: julia --project=. test/integration.jl
+
+      - name: Documentation examples
+        # Independent of dim/degree, so only run it once per OS.
+        if: matrix.dim == 2 && matrix.deg == 2
+        shell: bash
+        run: julia --project=. test/docs_examples.jl

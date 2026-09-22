@@ -54,10 +54,32 @@ The inputs in `test/data/` are copied from tandem's own `examples/` and all use
 > parallel-consistency and probe-writer integration tests) — see
 > [`test/README.md`](https://github.com/TEAR-ERC/tandem/blob/main/test/README.md).
 >
-> That suite has been run separately against the exact source and dependency versions this JLL
-> is built from (2D, degree 2): **41/41 passing**, including the static and SEAS regression
-> tests against upstream's reference data, the convergence-slope check, and parallel
-> consistency across 1/2/4/8 ranks.
+> Their **pytest integration tests are run here** by `test/integration.jl` (see below); the
+> 12 C++ unit binaries are not, since they are not shipped in the JLL. Those were run
+> separately against the same source and dependency versions: 31/31 passing.
+
+## Test suites
+
+| File | Trigger | What it runs |
+|---|---|---|
+| `test/runtests.jl` | every push (`ci.yml`) | the smoke suite above — fast, no network |
+| `test/integration.jl` | on demand (`integration.yml`) | **tandem's own pytest suite** against the JLL binaries: static and SEAS regression vs upstream reference data, convergence slope, 1/2/4/8-rank consistency, volume tagging, HDF5 probe-writer |
+| `test/docs_examples.jl` | on demand (`integration.yml`) | the worked examples from tandem's documentation: the elasticity solver, a direct MUMPS/LU solve, and gmsh `.geo` → `.msh` → tandem |
+
+The integration workflow is `workflow_dispatch` only: it clones tandem and
+`tandem_test_data`, installs a Python stack and runs real simulations. It takes
+dimension and degree as inputs, so you can run one configuration or a matrix.
+
+Set `TANDEM_DIM` / `TANDEM_DEGREE` to choose the configuration when running locally:
+
+```bash
+TANDEM_DIM=2 TANDEM_DEGREE=2 julia --project=. test/integration.jl
+julia --project=. test/docs_examples.jl
+```
+
+Both need `pytest`, `numpy`, `pandas`, `meshio` and `vtk` importable; gmsh comes from
+`gmsh_jll`, resolved in a throwaway project because it pins `HDF5_jll < 2` and so cannot
+share an environment with `Tandem_jll`.
 
 ## Running against a deployed JLL
 
