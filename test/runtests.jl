@@ -5,7 +5,7 @@ using CompilerSupportLibraries_jll, OpenBLAS32_jll
 # JLL built locally with BinaryBuilder (`julia build_tarballs.jl --deploy=local <triplet>`),
 # point TANDEM_JLL_LOCAL_PATH at the generated JLL directory:
 #   TANDEM_JLL_LOCAL_PATH=~/.julia/dev/Tandem_jll julia --project=. -e 'using Pkg; Pkg.develop(path=ENV["TANDEM_JLL_LOCAL_PATH"]); Pkg.test()'
-if haskey(ENV, "TANDEM_JLL_LOCAL_PATH")
+if !isempty(get(ENV, "TANDEM_JLL_LOCAL_PATH", ""))
     local_jll = expanduser(ENV["TANDEM_JLL_LOCAL_PATH"])
     println("Using locally built Tandem_jll from $local_jll")
     Pkg.develop(path=local_jll)
@@ -51,11 +51,21 @@ const ilp64_lib = Sys.iswindows() ?
 const backing_libs = join((ilp64_lib, OpenBLAS32_jll.libopenblas_path), ";")
 
 function with_env(cmd::Cmd; extra_libpath::Vector{String}=String[])
+    key = Tandem_jll.JLLWrappers.LIBPATH_env
+    # Prepend to whatever the command already carries rather than replacing it.
+    # On Windows this variable is PATH, and dropping its existing entries leaves
+    # the child process unable to resolve the system DLLs.
+    current = ""
+    for e in something(cmd.env, String[])
+        startswith(e, key * "=") && (current = e[length(key)+2:end])
+    end
+    isempty(current) && (current = get(ENV, key, ""))
     libdirs = unique(vcat(CompilerSupportLibraries_jll.LIBPATH_list...,
-                          Tandem_jll.LIBPATH_list..., extra_libpath))
+                          Tandem_jll.LIBPATH_list..., extra_libpath,
+                          String.(filter(!isempty, split(current, pathsep)))))
     return addenv(cmd,
         "LBT_DEFAULT_LIBS" => backing_libs,
-        Tandem_jll.JLLWrappers.LIBPATH_env => join(libdirs, pathsep),
+        key => join(libdirs, pathsep),
         "OMP_NUM_THREADS" => "1",
     )
 end
@@ -63,7 +73,8 @@ end
 # Interpolate cmd.exec, not cmd: Julia allows only the first interpolant to carry
 # its own environment, and the JLL wrappers set one on both.
 mpirun(n::Int, cmd::Cmd) =
-    with_env(`$(mpiexec_cmd) -n $n $(cmd.exec)`; extra_libpath=[MPI_LIBPATH[]])
+    with_env(`$(mpiexec_cmd) -n $n $(cmd.exec)`;
+             extra_libpath=vcat(MPI_LIBPATH[], Tandem_jll.LIBPATH[]))
 
 serial(cmd::Cmd) = with_env(cmd)
 
